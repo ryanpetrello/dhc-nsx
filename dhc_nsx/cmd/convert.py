@@ -2,10 +2,10 @@ import argparse
 import itertools
 import uuid
 
-from oslo.db.sqlalchemy import session
+from oslo_db.sqlalchemy import session
 import sqlalchemy as sa
 
-def convert_nsx_to_ml2(connection, dry_run=False):
+def convert_nsx_to_ml2(connection, dry_run=False, vni_start=1000):
     engine = session.create_engine(connection)
 
     def exec_q(q):
@@ -50,6 +50,23 @@ def convert_nsx_to_ml2(connection, dry_run=False):
     vnis = engine.execute(
         vnis_alloc.select(vnis_alloc.c.allocated==False)
     ).fetchall()
+
+    if len(vnis) == 0:
+        # if vnis is empty that means the table wasn't prepopulated.
+        # lets do that now..
+        engine.execute(
+            vnis_alloc.insert.execute(
+                [{'vxlan_vni': x,
+                  'allocated': 1} for x in range(
+                    vni_start,
+                    (vni_start + len(networks))
+                )]
+            )
+        )
+        engine.commit()
+        vnis = engine.execute(
+            vnis_alloc.select(vnis_alloc.c.allocated==False)
+        ).fetchall()
 
     if len(networks) > len(vnis):
         print 'There are more networks than avaialbe VNIs'
@@ -142,6 +159,11 @@ def main():
         action='store_true',
         help='Conduct a dry-run'
     )
+    parser.add_argument(
+        '--vni-start',
+        default=1000,
+        help='ID to start the new vni range with.'
+    )
 
     args = parser.parse_args()
-    convert_nsx_to_ml2(args.connection, args.dry_run)
+    convert_nsx_to_ml2(args.connection, args.dry_run, args.vni_start)
