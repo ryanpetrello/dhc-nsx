@@ -113,16 +113,21 @@ def convert_nsx_to_ml2(connection, dry_run=False):
 
     for index, old_binding in enumerate(ports_to_update):
         print 'Migrating Binding %s/%s' % (index, total)
-        q = new_bindings.insert().values(
-            port_id=old_binding.portbindingports_port_id,
-            host=old_binding.portbindingports_host,
-            vif_type='ovs',
-            driver='dhcnsx',
-            segment=segment_cache[old_binding.portbindingports_port_id],
-            vnic_type='normal',
-            vif_details='{"port_filter": true}'
-        )
-        retval = exec_q(q)
+        if old_binding.portbindingports_port_id not in segment_cache:
+            print 'Port %s no longer exists, skipping...' % (
+                old_binding.portbindingports_port_id
+            )
+        else:
+            q = new_bindings.insert().values(
+                port_id=old_binding.portbindingports_port_id,
+                host=old_binding.portbindingports_host,
+                vif_type='ovs',
+                driver='dhcnsx',
+                segment=segment_cache[old_binding.portbindingports_port_id],
+                vnic_type='normal',
+                vif_details='{"port_filter": true}'
+            )
+            retval = exec_q(q)
 
         q = old_bindings.delete(
             old_bindings.c.port_id==old_binding.portbindingports_port_id,
